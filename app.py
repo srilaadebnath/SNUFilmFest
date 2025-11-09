@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt
 
 st.title("OTT Audience Map for SNU Film Fest")
 
@@ -51,6 +52,9 @@ def fit_cluster_model():
 
 encoder, kmeans, encoded_columns = fit_cluster_model()
 
+# Get cluster labels for base profiles
+df_train['audience_group'] = kmeans.predict(encoder.transform(df_selected))
+
 # --- Manual user input section ---
 st.subheader("Enter your preferences below to discover your audience group:")
 movie_genre = st.selectbox(
@@ -81,6 +85,43 @@ if st.button("Find my audience group"):
         user_encoded = encoder.transform(df_user[encoded_columns])
         cluster = kmeans.predict(user_encoded)
         st.success(f"Your viewing preferences belong to **Audience Group {cluster[0]}**.")
+
+        # 1. Show cluster distribution
+        st.write("### Audience Groups Distribution")
+        group_counts = df_train['audience_group'].value_counts().sort_index()
+        fig1, ax1 = plt.subplots()
+        ax1.bar(group_counts.index.astype(str), group_counts.values)
+        ax1.set_xlabel("Audience Group")
+        ax1.set_ylabel("Count")
+        st.pyplot(fig1)
+        
+        # 2. Show genre/OTT/lang breakdown for user's group
+        st.write(f"### Preferences Within Your Audience Group {cluster[0]}")
+        group_df = df_train[df_train['audience_group'] == cluster[0]]
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            genre_counts = group_df['movie_genre_top1'].value_counts()
+            fig2, ax2 = plt.subplots()
+            ax2.pie(genre_counts, labels=genre_counts.index, autopct='%1.1f%%')
+            ax2.set_title("Movie Genre Breakdown")
+            st.pyplot(fig2)
+
+        with col2:
+            ott_counts = group_df['ott_top1'].value_counts()
+            fig3, ax3 = plt.subplots()
+            ax3.pie(ott_counts, labels=ott_counts.index, autopct='%1.1f%%')
+            ax3.set_title("OTT Platform Breakdown")
+            st.pyplot(fig3)
+
+        with col3:
+            lang_counts = group_df['content_lang_top1'].value_counts()
+            fig4, ax4 = plt.subplots()
+            ax4.pie(lang_counts, labels=lang_counts.index, autopct='%1.1f%%')
+            ax4.set_title("Content Language Breakdown")
+            st.pyplot(fig4)
+
+        # Optional: Save previous user's selections for further analysis (not implemented here)
     except Exception as e:
         st.warning("Could not predict audience group for your input. Please check your selections and try again.")
 
