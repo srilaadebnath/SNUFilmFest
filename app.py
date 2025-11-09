@@ -7,13 +7,25 @@ from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-st.title("SNU Film Fest: Student Preferences Clustering")
+st.title("OTT Audience Map for SNU Film Fest")
+
+st.markdown("""
+The Cultural Committee is planning the annual Film Fest. 
+They want to know the student audience segments.
+
+📊 **Columns:** `movie_genre_top1`, `series_genre_top1`, `ott_top1`, `content_lang_top1`
+🧩 **Task:** Cluster students into viewing preference groups.
+🏆 **Impact:** Helps plan screenings and OTT tie-ups.
+""")
 
 # --- Choose input mode ---
 input_mode = st.radio(
     "Choose how to enter your data:",
     ("Upload CSV or XLSX file", "Manual input (single user)")
 )
+
+# Main columns required as per the question
+required_categorical_cols = ['movie_genre_top1', 'series_genre_top1', 'ott_top1', 'content_lang_top1']
 
 if input_mode == "Upload CSV or XLSX file":
     uploaded_file = st.file_uploader("Upload CSV or Excel File", type=["csv", "xlsx"])
@@ -25,17 +37,21 @@ if input_mode == "Upload CSV or XLSX file":
 
         # Column cleaning
         df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
-        st.write("Cleaned Columns:", df.columns.tolist())
+        st.write("Detected Columns in dataset:", df.columns.tolist())
 
-        categorical_cols = ['movie_genre_top1','series_genre_top1','ott_top1','content_lang_top1']
-        categorical_cols = [col for col in categorical_cols if col in df.columns]
-        df_selected = df[categorical_cols].fillna("Unknown")
-        st.write("Used Columns: ", categorical_cols)
+        # Select only the required columns
+        available_cols = [col for col in required_categorical_cols if col in df.columns]
+        missing_cols = [col for col in required_categorical_cols if col not in df.columns]
+        df_selected = df[available_cols].fillna("Unknown")
+        st.write(f"Used Columns for clustering: {available_cols}")
+
+        if missing_cols:
+            st.warning(f"Missing columns in your file: {missing_cols}. Clustering will use only available columns.")
 
         # Encoding
         encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
         encoded = encoder.fit_transform(df_selected)
-        encoded_df = pd.DataFrame(encoded, columns=encoder.get_feature_names_out(categorical_cols))
+        encoded_df = pd.DataFrame(encoded, columns=encoder.get_feature_names_out(available_cols))
 
         # Elbow Plot
         inertia = []
@@ -52,7 +68,7 @@ if input_mode == "Upload CSV or XLSX file":
         ax.set_title("Elbow Method for Optimal k")
         st.pyplot(fig)
 
-        k = st.slider("Select k for KMeans", min_value=2, max_value=8, value=3)
+        k = st.slider("Select k for KMeans (audience segments)", min_value=2, max_value=8, value=3)
         kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
         df['Cluster'] = kmeans.fit_predict(encoded_df)
 
@@ -67,22 +83,25 @@ if input_mode == "Upload CSV or XLSX file":
         X_pca = pca.fit_transform(encoded_df)
         fig, ax = plt.subplots()
         sns.scatterplot(x=X_pca[:,0], y=X_pca[:,1], hue=df['Cluster'], palette="viridis", s=60, ax=ax)
-        ax.set_title("Clusters of Student Preferences (PCA)")
+        ax.set_title("Student Audience Groups (PCA)")
         st.pyplot(fig)
 
         # Cluster count
         fig2, ax2 = plt.subplots()
         sns.countplot(x=df['Cluster'], palette="viridis", ax=ax2)
-        ax2.set_title("Number of Students per Cluster")
+        ax2.set_title("Number of Students per Audience Group")
         st.pyplot(fig2)
 
         # Cluster summary
+        st.subheader("Audience Group Insights")
         for cluster in sorted(df['Cluster'].unique()):
-            st.subheader(f"Cluster {cluster} Insights")
+            st.markdown(f"**Group {cluster} — Viewing Preferences:**")
             cluster_data = df[df['Cluster']==cluster]
-            for col in categorical_cols:
+            for col in available_cols:
                 top_choice = cluster_data[col].mode()[0]
-                st.write(f"**Most common {col}:** {top_choice}")
+                st.write(f"Most common {col.replace('_', ' ')}: `{top_choice}`")
+
+        st.info("Use these insights to plan screenings and OTT tie-ups for different student segments!")
 
     else:
         st.info("Upload a file to get started.")
@@ -116,8 +135,8 @@ elif input_mode == "Manual input (single user)":
         st.write("Processed Data:", df)
 
         # Dummy clustering for one user
-        st.warning("With single user input, clustering and metrics are not meaningful (need multiple users).")
-        st.info("To see clustering and visualizations, upload a dataset of multiple users.")
+        st.warning("With single user input, clustering and metrics are not meaningful (need multiple students).")
+        st.info("To see clustering and student audience groups, upload a dataset of multiple students.")
 
         # Show encoding as demonstration
         encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
