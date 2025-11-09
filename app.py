@@ -24,7 +24,6 @@ input_mode = st.radio(
     ("Upload CSV or XLSX file", "Manual input (single user)")
 )
 
-# Main columns required as per the question
 required_categorical_cols = ['movie_genre_top1', 'series_genre_top1', 'ott_top1', 'content_lang_top1']
 
 if input_mode == "Upload CSV or XLSX file":
@@ -72,6 +71,11 @@ if input_mode == "Upload CSV or XLSX file":
         kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
         df['Cluster'] = kmeans.fit_predict(encoded_df)
 
+        # Save encoder and kmeans to session state for use in manual input mode!
+        st.session_state['encoder'] = encoder
+        st.session_state['encoded_columns'] = available_cols
+        st.session_state['kmeans'] = kmeans
+
         # Metrics
         silhouette = silhouette_score(encoded_df, df['Cluster'])
         db_index = davies_bouldin_score(encoded_df, df['Cluster'])
@@ -102,7 +106,6 @@ if input_mode == "Upload CSV or XLSX file":
                 st.write(f"Most common {col.replace('_', ' ')}: `{top_choice}`")
 
         st.info("Use these insights to plan screenings and OTT tie-ups for different student segments!")
-
     else:
         st.info("Upload a file to get started.")
 
@@ -125,7 +128,6 @@ elif input_mode == "Manual input (single user)":
         ["English", "Hindi", "Bengali", "Tamil", "Telugu", "Other"]
     )
     if st.button("Show my input as processed data"):
-        # Create single-row dataframe
         df = pd.DataFrame([{
             "movie_genre_top1": movie_genre,
             "series_genre_top1": series_genre,
@@ -134,12 +136,21 @@ elif input_mode == "Manual input (single user)":
         }])
         st.write("Processed Data:", df)
 
-        # Dummy clustering for one user
-        st.warning("With single user input, clustering and metrics are not meaningful (need multiple students).")
-        st.info("To see clustering and student audience groups, upload a dataset of multiple students.")
-
-        # Show encoding as demonstration
         encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
         encoded = encoder.fit_transform(df)
         encoded_df = pd.DataFrame(encoded, columns=encoder.get_feature_names_out(df.columns.tolist()))
         st.write("One-hot encoded data for your input:", encoded_df)
+
+        # Predict cluster using saved encoder and kmeans from uploaded data
+        if "encoder" in st.session_state and "kmeans" in st.session_state and "encoded_columns" in st.session_state:
+            # Use fitted encoder to transform to same column order as training
+            try:
+                user_encoded = st.session_state["encoder"].transform(df[st.session_state["encoded_columns"]])
+                cluster = st.session_state["kmeans"].predict(user_encoded)
+                st.success(f"Your input belongs to **Audience Group {cluster[0]}**.")
+            except Exception as e:
+                st.warning("Could not predict cluster for your input. Make sure you uploaded data with all required columns and used matching choices.")
+        else:
+            st.warning("To determine your audience group, please first upload a dataset and run clustering!")
+
+        st.info("To see clustering and student audience groups, upload a dataset of multiple students.")
